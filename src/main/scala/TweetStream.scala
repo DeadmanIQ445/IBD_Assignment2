@@ -7,7 +7,7 @@ object TweetStream{
   def start(spark: SparkConf, sparkSession: SparkSession): Unit ={
     val classifier = new Classifier()
     if (!scala.reflect.io.File("./models/model").exists) {
-      classifier.fit(sparkSession)
+      classifier.fit_and_evaluate(sparkSession)
     }
 
     val stream = sparkSession.readStream.format("socket")

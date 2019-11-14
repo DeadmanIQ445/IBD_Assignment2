@@ -1,15 +1,15 @@
+import org.apache.hadoop.mapred.TaskCompletionEvent.Status
 import org.apache.spark.ml.{Pipeline, PipelineModel}
-import org.apache.spark.ml.classification.LinearSVC
+import org.apache.spark.ml.classification.{LinearSVC, LogisticRegression}
 import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import org.apache.spark.ml.feature.{CountVectorizer, IDF, RegexTokenizer, StopWordsRemover}
-import org.apache.spark.sql.{Dataset, Row, SparkSession}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.functions.lit
 import org.apache.spark.streaming.dstream.ReceiverInputDStream
-import twitter4j.Status
 
 /** This class uses TF/IDF to prepare data. You can change lsvc to another model.*/
 class Classifier{
-
   /**
    * These are the words that will be thrown away from our vectorization
    */
@@ -42,6 +42,11 @@ class Classifier{
     .setMaxIter(10)
     .setRegParam(0.1)
 
+  val lr : LogisticRegression = new LogisticRegression()
+    .setMaxIter(100)
+    .setRegParam(0.02)
+    .setElasticNetParam(0.3)
+
   val evaluator: BinaryClassificationEvaluator = new BinaryClassificationEvaluator()
     .setRawPredictionCol("prediction")
     .setLabelCol("label")
@@ -65,19 +70,43 @@ class Classifier{
   }
 
   /**
-   * method for training our model and evaluationg it (by training on 80% of data and testing on 20&)
+   * method for training our model and evaluationg it (by training on 90% of data and testing on 10%)
    * @param spark - SparkSession, look at the testml.main for example of it
    */
-  def fit_and_evaluate(spark: SparkSession): Double ={
+  def fit_and_evaluate(spark: SparkSession): Unit ={
     val df = spark.read.format("csv")
       .option("header", "true")
       .option("delimiter",",")
       .option("inferSchema","true")
       .load("./csv/train.csv").toDF("id","label","features_raw")
-    val Array(training, test) = df.select("label","features_raw").randomSplit(Array(0.8, 0.2), seed = 12345)
+    val Array(training, test) = df.select("label","features_raw").randomSplit(Array(0.9, 0.1), seed = 12345)
     this.model = pipeline.fit(training)
     val predictions = model.transform(test)
-    evaluator.evaluate(predictions)
+    evaluation(predictions)
+    this.model.write.overwrite().save("./models/model")
+  }
+
+  def evaluation(predictions : DataFrame): Unit ={
+    val areaUnderROC = evaluator.evaluate(predictions)
+    val lp : DataFrame = predictions.select("prediction", "label")
+    val counttotal = predictions.count().toDouble
+    val correct = lp.filter("label == prediction").count().toDouble
+    val wrong = lp.filter("label != prediction").count().toDouble
+    val ratioWrong = wrong / counttotal
+    val accuracy = correct / counttotal
+    val truen = lp.filter("label == 0.0").filter("label == prediction").count() / counttotal
+    val truep = lp.filter("label == 1.0").filter("label == prediction").count() / counttotal
+    val falsen = lp.filter("label == 0.0").filter("label != prediction").count() / counttotal
+    val falsep = lp.filter("label == 1.0").filter("label != prediction").count() / counttotal
+    val precision = truep / (truep + falsep)
+    val recall = truep / (truep + falsen)
+    val f1_score = (2 * precision * recall) / (precision + recall)
+
+    println("AreaUnderROC: " + areaUnderROC)
+    println("Accuracy: ", accuracy)
+    println("Presicion: ", precision)
+    println("Recall: ", recall)
+    println("F1-score: ", f1_score)
   }
 
   /**
@@ -90,25 +119,9 @@ class Classifier{
     val dfWithFoobar = dataset.withColumn("label", lit(null: String))
     if (this.model == null)
       this.model = PipelineModel.load("./models/model")
-    this.model.transform(dfWithFoobar)
+    val predictions = this.model.transform(dfWithFoobar)
+    // evaluation(predictions)
+    predictions
   }
 
-  def predict(dataset: ReceiverInputDStream[Status], sparkSession: SparkSession): Unit ={
-    import org.apache.spark.ml._
-    if (this.model == null)
-      this.model = PipelineModel.load("./models/model")
-    val df = dataset.map(status => status.getText)
-    df.foreachRDD { rdd =>
-
-      // Get the singleton instance of SparkSession
-      import sparkSession.implicits._
-
-      // Convert RDD[String] to DataFrame
-      val wordsDataFrame = rdd.toDF("features_raw")
-      wordsDataFrame.show(false)
-      wordsDataFrame.withColumn("label", lit(null: String))
-      val predict = this.model.transform(wordsDataFrame)
-      predict.select("features_raw", "prediction").show()
-    }
-  }
 }
