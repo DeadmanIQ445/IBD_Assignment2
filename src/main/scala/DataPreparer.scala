@@ -1,11 +1,11 @@
 import org.apache.spark.ml.{Pipeline, PipelineModel}
-import org.apache.spark.ml.classification.LinearSVC
+import org.apache.spark.ml.classification.{LinearSVC, LogisticRegression}
 import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import org.apache.spark.ml.feature.{CountVectorizer, IDF, RegexTokenizer, StopWordsRemover, Word2Vec}
 import org.apache.spark.sql.functions.lit
 
 import scala.language.postfixOps
-import org.apache.spark.sql.{Dataset, Row, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 
 
 /** This class uses Word2Vec to prepare data. You can change lsvc (linear SVC) to another model.*/
@@ -43,7 +43,7 @@ class ClassifierW2V{
     .setRawPredictionCol("prediction")
     .setLabelCol("label")
 
-  val steps =  Array( regexTokenizer, remover, model_for_w2v, lsvc)
+  val steps =  Array(regexTokenizer, remover, model_for_w2v, lsvc)
   val pipeline: Pipeline = new Pipeline().setStages(steps)
   var model: PipelineModel = null
 
@@ -131,7 +131,12 @@ class Classifier{
     .setRawPredictionCol("prediction")
     .setLabelCol("label")
 
-  val steps =  Array( regexTokenizer, remover, cv, idf, lsvc)
+  val lr = new LogisticRegression()
+    .setMaxIter(100)
+    .setRegParam(0.02)
+    .setElasticNetParam(0.3)
+
+  val steps =  Array(regexTokenizer, remover, cv, idf, lsvc)
   val pipeline: Pipeline = new Pipeline().setStages(steps)
   var model: PipelineModel = null
 
@@ -157,11 +162,34 @@ class Classifier{
       .option("header", "true")
       .option("delimiter",",")
       .option("inferSchema","true")
-      .load("./csv/train.csv").toDF("id","label","features_raw")
-    val Array(training, test) = df.select("label","features_raw").randomSplit(Array(0.8, 0.2), seed = 12345)
-    val model = pipeline.fit(training)
+      .load("./csv/train.csv")
+      .toDF("id","label","features_raw")
+    val Array(training : DataFrame, test : DataFrame) = df.select("label","features_raw").randomSplit(Array(0.8, 0.2), seed = 12345)
     val predictions = model.transform(test)
-    evaluator.evaluate(predictions)
+    this.model = pipeline.fit(training)
+    evaluation(predictions)
+    this.model.write.overwrite().save("./models/model")
+  }
+
+  def evaluation(predictions : DataFrame): Unit ={
+    val areaUnderROC = evaluator.evaluate(predictions)
+    val lp : DataFrame = predictions.select("prediction", "label")
+    val counttotal = predictions.count().toDouble
+    val correct = lp.filter("label == prediction").count().toDouble
+    val wrong = lp.filter("label != prediction").count().toDouble
+    val ratioWrong = wrong / counttotal
+    val accuracy = correct / counttotal
+    val truen = lp.filter("label == 0.0").filter("label == prediction").count() / counttotal
+    val truep = lp.filter("label == 1.0").filter("label == prediction").count() / counttotal
+    val falsen = lp.filter("label == 0.0").filter("label != prediction").count() / counttotal
+    val falsep = lp.filter("label == 1.0").filter("label != prediction").count() / counttotal
+
+    println("AreaUnderROC: " + areaUnderROC)
+    println("Accuracy: ", accuracy)
+    println("True Positive: ", truep)
+    println("False Positive: ", falsep)
+    println("True Negative: ", truen)
+    println("False Negative: ", falsen)
   }
 
   /**
@@ -175,27 +203,5 @@ class Classifier{
     if (this.model.equals(null))
       this.model = PipelineModel.load("./models/model")
     this.model.transform(dfWithFoobar)
-  }
-}
-
-//Examples of work with DataPreparer
-object testml {
-  def main(args: Array[String]): Unit = {
-    val spark = SparkSession.builder().master("local").appName("Classifier").getOrCreate()
-
-    val testPath = "./csv/test.csv"
-
-    val df = spark.read.format("csv")
-      .option("header", "true")
-      .option("delimiter",",")
-      .option("inferSchema","true")
-      .load(testPath).toDF("id","features_raw")
-
-    val classifier = new Classifier()
-    print(classifier.fit_and_evaluate(spark))
-    classifier.fit(spark)
-    val df_classed = classifier.predict(df)
-    df_classed.show(20, false)
-
   }
 }

@@ -1,4 +1,4 @@
-name := "project"
+name := "IBD_Assignment2"
 
 version := "0.1"
 
