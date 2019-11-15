@@ -144,10 +144,10 @@ class Classifier{
     val f1_score = (2 * precision * recall) / (precision + recall)
 
     println("AreaUnderROC: " + areaUnderROC)
-    println("Accuracy:    ", accuracy)
-    println("Presicion:   ", precision)
-    println("Recall:      ", recall)
-    println("F1-score:    ", f1_score)
+    println("Accuracy:   ", accuracy)
+    println("Presicion:  ", precision)
+    println("Recall:     ", recall)
+    println("F1-score:   ", f1_score)
   }
 
   /**
