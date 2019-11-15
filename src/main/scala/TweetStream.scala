@@ -13,10 +13,10 @@ object TweetStream{
     var trainPath: String = null
 
     if (flag == "1"){
-      modelsPath = "/user/jakarta/models"
-      chkpntPath = "/user/jakarta/chkpnt"
-      outputPath = "/user/jakarta/output"
-      trainPath =  "/twitter/twitter_sentiment_data.csv"
+      modelsPath = "hdfs://namenode:9000/user/jakarta/models"
+      chkpntPath = "hdfs://namenode:9000/user/jakarta/chkpnt/"
+      outputPath = "hdfs://namenode:9000/user/jakarta/output/"
+      trainPath =  "hdfs://namenode:9000/twitter/twitter_sentiment_data.csv"
     }
     else {
       modelsPath  = "./models"
