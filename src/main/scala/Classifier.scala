@@ -70,61 +70,61 @@ class Classifier{
    * method for training our model
    * @param spark - SparkSession, look at the testml.main for example of it
    */
-  def fit(spark: SparkSession): Unit ={
+  def fit(spark: SparkSession, trainPath: String, modelsPath: String): Unit ={
     val df = spark.read.format("csv")
       .option("header", "true")
       .option("delimiter",",")
       .option("inferSchema","true")
-      .load("./csv/train.csv").toDF("id","label","features_raw")
+      .load(trainPath).toDF("id","label","features_raw")
 
     this.model1 = pipeline1.fit(df)
-    this.model1.write.overwrite().save("./models/model1")
+    this.model1.write.overwrite().save(modelsPath.concat("/model1"))
 
     this.model2 = pipeline2.fit(df)
-    this.model2.write.overwrite().save("./models/model2")
+    this.model2.write.overwrite().save(modelsPath.concat("/model2"))
 
     this.model3 = pipeline3.fit(df)
-    this.model3.write.overwrite().save("./models/model3")
+    this.model3.write.overwrite().save(modelsPath.concat("/model3"))
 
     this.model4 = pipeline4.fit(df)
-    this.model4.write.overwrite().save("./models/model4")
+    this.model4.write.overwrite().save(modelsPath.concat("/model4"))
   }
 
   /**
    * method for training our model and evaluationg it (by training on 90% of data and testing on 10%)
    * @param spark - SparkSession, look at the testml.main for example of it
    */
-  def fit_and_evaluate(spark: SparkSession): Unit ={
+  def fit_and_evaluate(spark: SparkSession, trainPath: String,modelPath: String): Unit ={
     val df = spark.read.format("csv")
       .option("header", "true")
       .option("delimiter",",")
       .option("inferSchema","true")
-      .load("./csv/train.csv").toDF("id","label","features_raw")
+      .load(trainPath).toDF("id","label","features_raw")
     val Array(training, test) = df.select("label","features_raw").randomSplit(Array(0.9, 0.1), seed = 12345)
 
     this.model1 = pipeline1.fit(training)
     val predictions1 = model1.transform(test)
     println("TF-IDF + LinearSVC")
     evaluation(predictions1)
-    this.model1.write.overwrite().save("./models/model1")
+    this.model1.write.overwrite().save(modelPath.concat("/model1"))
 
     this.model2 = pipeline2.fit(training)
     val predictions2 = model2.transform(test)
     println("TF-IDF + LogisticRegression")
     evaluation(predictions2)
-    this.model2.write.overwrite().save("./models/model2")
+    this.model2.write.overwrite().save(modelPath.concat("/model2"))
 
     this.model3 = pipeline3.fit(training)
     val predictions3 = model3.transform(test)
     println("Word2Vec + LinearSVC")
     evaluation(predictions3)
-    this.model3.write.overwrite().save("./models/model3")
+    this.model3.write.overwrite().save(modelPath.concat("/model3"))
 
     this.model4 = pipeline4.fit(training)
     val predictions4 = model4.transform(test)
     println("Word2Vec + LogisticRegression")
     evaluation(predictions4)
-    this.model4.write.overwrite().save("./models/model4")
+    this.model4.write.overwrite().save(modelPath.concat("/model4"))
   }
 
   def evaluation(predictions : DataFrame): Unit ={
@@ -155,25 +155,25 @@ class Classifier{
    * @param dataset - dataset with tweets
    * @return dataset with tweets and predictions
    */
-  def predict(dataset: Dataset[Row], number: String): Dataset[Row] ={
+  def predict(dataset: Dataset[Row], number: String, modelsPath: String): Dataset[Row] ={
     import org.apache.spark.ml._
     val dfWithFoobar = dataset.withColumn("label", lit(null: String))
     number match {
       case "1" =>
         if (this.model1 == null)
-          this.model1 = PipelineModel.load("./models/model1")
+          this.model1 = PipelineModel.load(modelsPath.concat("/model1"))
         this.model1.transform(dfWithFoobar)
       case "2" =>
         if (this.model2 == null)
-          this.model2 = PipelineModel.load("./models/model2")
+          this.model2 = PipelineModel.load(modelsPath.concat("/model2"))
         this.model2.transform(dfWithFoobar)
       case "3" =>
         if (this.model3 == null)
-          this.model3 = PipelineModel.load("./models/model3")
+          this.model3 = PipelineModel.load(modelsPath.concat("/model3"))
         this.model3.transform(dfWithFoobar)
       case "4" =>
         if (this.model4 == null)
-          this.model4 = PipelineModel.load("./models/model4")
+          this.model4 = PipelineModel.load(modelsPath.concat("/model4"))
         this.model4.transform(dfWithFoobar)
     }
   }
