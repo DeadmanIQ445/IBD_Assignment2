@@ -2,7 +2,7 @@ import org.apache.hadoop.mapred.TaskCompletionEvent.Status
 import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.ml.classification.{LinearSVC, LogisticRegression}
 import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
-import org.apache.spark.ml.feature.{CountVectorizer, IDF, RegexTokenizer, StopWordsRemover}
+import org.apache.spark.ml.feature.{CountVectorizer, IDF, RegexTokenizer, StopWordsRemover, Word2Vec}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.functions.lit
@@ -29,6 +29,8 @@ class Classifier{
     .setInputCol("features_split_stop")
     .setOutputCol("cv")
 
+  val model_for_w2v: Word2Vec = new Word2Vec().setInputCol("features_split_stop")
+    .setOutputCol("features")
 
   val idf: IDF = new IDF()
     .setInputCol("cv")
@@ -51,9 +53,18 @@ class Classifier{
     .setRawPredictionCol("prediction")
     .setLabelCol("label")
 
-  val steps =  Array( regexTokenizer, remover, cv, idf, lsvc)
-  val pipeline: Pipeline = new Pipeline().setStages(steps)
-  var model: PipelineModel = _
+  val steps1 =  Array( regexTokenizer, remover, cv, idf, lsvc)
+  val steps2 =  Array( regexTokenizer, remover, cv, idf, lr)
+  val steps3 =  Array( regexTokenizer, remover, model_for_w2v, lr)
+  val steps4 =  Array( regexTokenizer, remover, model_for_w2v, lsvc)
+  val pipeline1: Pipeline = new Pipeline().setStages(steps1)
+  val pipeline2: Pipeline = new Pipeline().setStages(steps2)
+  val pipeline3: Pipeline = new Pipeline().setStages(steps3)
+  val pipeline4: Pipeline = new Pipeline().setStages(steps4)
+  var model1: PipelineModel = _
+  var model2: PipelineModel = _
+  var model3: PipelineModel = _
+  var model4: PipelineModel = _
 
   /**
    * method for training our model
@@ -65,8 +76,18 @@ class Classifier{
       .option("delimiter",",")
       .option("inferSchema","true")
       .load("./csv/train.csv").toDF("id","label","features_raw")
-    this.model = pipeline.fit(df)
-    this.model.write.overwrite().save("./models/model")
+
+    this.model1 = pipeline1.fit(df)
+    this.model1.write.overwrite().save("./models/model1")
+
+    this.model2 = pipeline2.fit(df)
+    this.model2.write.overwrite().save("./models/model2")
+
+    this.model3 = pipeline3.fit(df)
+    this.model3.write.overwrite().save("./models/model3")
+
+    this.model4 = pipeline4.fit(df)
+    this.model4.write.overwrite().save("./models/model4")
   }
 
   /**
@@ -80,10 +101,30 @@ class Classifier{
       .option("inferSchema","true")
       .load("./csv/train.csv").toDF("id","label","features_raw")
     val Array(training, test) = df.select("label","features_raw").randomSplit(Array(0.9, 0.1), seed = 12345)
-    this.model = pipeline.fit(training)
-    val predictions = model.transform(test)
-    evaluation(predictions)
-    this.model.write.overwrite().save("./models/model")
+
+    this.model1 = pipeline1.fit(training)
+    val predictions1 = model1.transform(test)
+    println("TF-IDF + LinearSVC")
+    evaluation(predictions1)
+    this.model1.write.overwrite().save("./models/model1")
+
+    this.model2 = pipeline2.fit(training)
+    val predictions2 = model2.transform(test)
+    println("TF-IDF + LogisticRegression")
+    evaluation(predictions2)
+    this.model2.write.overwrite().save("./models/model2")
+
+    this.model3 = pipeline3.fit(training)
+    val predictions3 = model3.transform(test)
+    println("Word2Vec + LinearSVC")
+    evaluation(predictions3)
+    this.model3.write.overwrite().save("./models/model3")
+
+    this.model4 = pipeline4.fit(training)
+    val predictions4 = model4.transform(test)
+    println("Word2Vec + LogisticRegression")
+    evaluation(predictions4)
+    this.model4.write.overwrite().save("./models/model4")
   }
 
   def evaluation(predictions : DataFrame): Unit ={
@@ -103,10 +144,10 @@ class Classifier{
     val f1_score = (2 * precision * recall) / (precision + recall)
 
     println("AreaUnderROC: " + areaUnderROC)
-    println("Accuracy: ", accuracy)
-    println("Presicion: ", precision)
-    println("Recall: ", recall)
-    println("F1-score: ", f1_score)
+    println("Accuracy:    ", accuracy)
+    println("Presicion:   ", precision)
+    println("Recall:      ", recall)
+    println("F1-score:    ", f1_score)
   }
 
   /**
@@ -114,14 +155,27 @@ class Classifier{
    * @param dataset - dataset with tweets
    * @return dataset with tweets and predictions
    */
-  def predict(dataset: Dataset[Row]): Dataset[Row] ={
+  def predict(dataset: Dataset[Row], number: String): Dataset[Row] ={
     import org.apache.spark.ml._
     val dfWithFoobar = dataset.withColumn("label", lit(null: String))
-    if (this.model == null)
-      this.model = PipelineModel.load("./models/model")
-    val predictions = this.model.transform(dfWithFoobar)
-    // evaluation(predictions)
-    predictions
+    number match {
+      case "1" =>
+        if (this.model1 == null)
+          this.model1 = PipelineModel.load("./models/model1")
+        this.model1.transform(dfWithFoobar)
+      case "2" =>
+        if (this.model2 == null)
+          this.model2 = PipelineModel.load("./models/model2")
+        this.model2.transform(dfWithFoobar)
+      case "3" =>
+        if (this.model3 == null)
+          this.model3 = PipelineModel.load("./models/model3")
+        this.model3.transform(dfWithFoobar)
+      case "4" =>
+        if (this.model4 == null)
+          this.model4 = PipelineModel.load("./models/model4")
+        this.model4.transform(dfWithFoobar)
+    }
   }
 
 }
