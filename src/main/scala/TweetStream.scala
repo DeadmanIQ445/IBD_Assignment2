@@ -29,7 +29,7 @@ object TweetStream{
       .option("path", "./output/".concat(i.toString)).start()
     }
 
-
+    WordCount.count(stream).writeStream.format("console").outputMode("complete").option("truncate", "false").start()
 
     sparkSession.streams.awaitAnyTermination()
   }

@@ -11,7 +11,7 @@ object TestStream {
     Logger.getLogger("akka").setLevel(Level.OFF)
     Logger.getLogger("owlqn").setLevel(Level.OFF)
 
-    print("To stop working with stream press Ctrl+C")
+    print("To stop working with stream press Ctrl+C\n")
 
     val sprconf = new SparkConf().set("spark.driver.allowMultipleContexts", "true").setMaster("local[*]").setAppName("TwitterStreamSentiment")
     val spark = SparkSession.builder().config(sprconf).getOrCreate()
