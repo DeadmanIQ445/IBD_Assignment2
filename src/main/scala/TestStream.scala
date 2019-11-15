@@ -14,13 +14,13 @@ object TestStream {
     print("To stop working with stream press Ctrl+C\n")
     print("Run on yarn or local? (1-yarn, 2-local)\n")
     val flag = scala.io.StdIn.readLine()
+    var sprconf:SparkConf = null
     if (flag == "1") {
-      val sprconf = new SparkConf().set("spark.driver.allowMultipleContexts", "true").setMaster("yarn").setAppName("TwitterStreamSentiment")
+      sprconf = new SparkConf().set("spark.driver.allowMultipleContexts", "true").setMaster("yarn").setAppName("TwitterStreamSentiment")
     }
     else {
-      val sprconf = new SparkConf().set("spark.driver.allowMultipleContexts", "true").setMaster("local[*]").setAppName("TwitterStreamSentiment")
+      sprconf = new SparkConf().set("spark.driver.allowMultipleContexts", "true").setMaster("local[*]").setAppName("TwitterStreamSentiment")
     }
-    val sprconf = new SparkConf().set("spark.driver.allowMultipleContexts", "true").setMaster("local[*]").setAppName("TwitterStreamSentiment")
     val spark = SparkSession.builder().config(sprconf).getOrCreate()
 
     TweetStream.start(sprconf, spark, flag)
