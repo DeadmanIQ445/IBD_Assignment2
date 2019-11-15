@@ -4,9 +4,9 @@ version := "0.1"
 
 scalaVersion := "2.11.12"
 
-dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-core" % "2.10.0"
-dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-databind" % "2.10.0"
-dependencyOverrides += "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.10.0"
+dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-core" % "2.9.5"
+dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.5"
+dependencyOverrides += "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.9.5"
 
 
 libraryDependencies ++= Seq("org.apache.spark" %% "spark-core" % "2.4.3",
